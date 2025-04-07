@@ -7,6 +7,12 @@ import {
   orderBy,
 } from "firebase/firestore";
 
+// 税抜 × 75% の振込金額を計算
+const calcPayout = (amount) => {
+  const taxExcluded = amount / 1.1;
+  return Math.round(taxExcluded * 0.75);
+};
+
 function getCurrentMonth() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -55,7 +61,7 @@ export default function RankingPage() {
           total: 0,
         };
       }
-      acc[sale.liverId].total += Number(sale.amount);
+      acc[sale.liverId].total += calcPayout(Number(sale.amount));
       return acc;
     }, {})
   ).sort((a, b) => b.total - a.total);
@@ -65,6 +71,9 @@ export default function RankingPage() {
   return (
     <div style={{ padding: "20px", maxWidth: "800px", margin: "0 auto" }}>
       <h2 style={{ color: "#DAA520" }}>ライバー別 サブスク売上ランキング</h2>
+      <p style={{ fontWeight: "bold", color: "#555", marginBottom: "10px" }}>
+        ※ 金額は振込金額の合計です（税抜の75%）
+      </p>
 
       <label>
         表示する月：
@@ -90,7 +99,6 @@ export default function RankingPage() {
     </div>
   );
 }
-
 function generateMonthOptions() {
   const now = new Date();
   const options = [];

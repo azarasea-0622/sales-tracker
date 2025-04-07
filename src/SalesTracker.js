@@ -17,6 +17,19 @@ const toKatakana = (str = "") =>
     String.fromCharCode(match.charCodeAt(0) + 0x60)
   );
 
+// 🔥 金額をまとめて計算（税・ギフトルーム・振込）
+const calcBreakdown = (amount) => {
+  const taxExcluded = amount / 1.1;
+  const tax = amount - taxExcluded;
+  const payout = Math.round(taxExcluded * 0.75);
+  const giftRoom = Math.round(taxExcluded * 0.25);
+  return {
+    tax: Math.round(tax),
+    giftRoom,
+    payout,
+  };
+};
+
 export default function SalesTracker() {
   const [sales, setSales] = useState([]);
   const [livers, setLivers] = useState([]);
@@ -25,7 +38,7 @@ export default function SalesTracker() {
     amount: "",
     type: "subscription",
     memo: "",
-    date: "", // 🔥 日付追加
+    date: "",
   });
   const [searchTerm, setSearchTerm] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
@@ -97,7 +110,6 @@ export default function SalesTracker() {
     setEditId(null);
     setShowSuggestions(false);
   };
-
   const handleEdit = (sale) => {
     const liver = livers.find((l) => l.id === sale.liverId);
     const yyyyMMdd = sale.date?.substring(0, 10);
@@ -140,12 +152,16 @@ export default function SalesTracker() {
         onChange={(e) => setSearchTerm(e.target.value)}
         style={{ ...inputStyle, marginBottom: "15px" }}
       />
+
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
             <th style={thStyle}>日付</th>
             <th style={thStyle}>ライバー名</th>
             <th style={thStyle}>金額</th>
+            <th style={thStyle}>消費税</th>
+            <th style={thStyle}>ギフトルーム</th>
+            <th style={thStyle}>振込予定</th>
             <th style={thStyle}>種別</th>
             <th style={thStyle}>出金</th>
             <th style={thStyle}>メモ</th>
@@ -153,26 +169,32 @@ export default function SalesTracker() {
           </tr>
         </thead>
         <tbody>
-          {filteredSales.map((s) => (
-            <tr key={s.id}>
-              <td style={tdStyle}>{new Date(s.date).toLocaleDateString()}</td>
-              <td style={tdStyle}>{getLiverName(s.liverId)}</td>
-              <td style={tdStyle}>¥{s.amount.toLocaleString()}</td>
-              <td style={tdStyle}>{s.type === "subscription" ? "サブスク" : "寄付"}</td>
-              <td style={tdStyle}>
-                <span style={{ color: s.withdrawn ? "green" : "red", fontWeight: "bold" }}>
-                  {s.withdrawn ? "済" : "未"}
-                </span>
-              </td>
-              <td style={tdStyle}>{s.memo}</td>
-              <td style={tdStyle}>
-                <button onClick={() => handleEdit(s)} style={miniButton}>編集</button>
-                <button onClick={() => handleDelete(s.id)} style={{ ...miniButton, backgroundColor: "#f44336" }}>
-                  削除
-                </button>
-              </td>
-            </tr>
-          ))}
+          {filteredSales.map((s) => {
+            const { tax, giftRoom, payout } = calcBreakdown(s.amount);
+            return (
+              <tr key={s.id}>
+                <td style={tdStyle}>{new Date(s.date).toLocaleDateString()}</td>
+                <td style={tdStyle}>{getLiverName(s.liverId)}</td>
+                <td style={tdStyle}>¥{s.amount.toLocaleString()}</td>
+                <td style={tdStyle}>¥{tax.toLocaleString()}</td>
+                <td style={tdStyle}>¥{giftRoom.toLocaleString()}</td>
+                <td style={tdStyle}>¥{payout.toLocaleString()}</td>
+                <td style={tdStyle}>{s.type === "subscription" ? "サブスク" : "寄付"}</td>
+                <td style={tdStyle}>
+                  <span style={{ color: s.withdrawn ? "green" : "red", fontWeight: "bold" }}>
+                    {s.withdrawn ? "済" : "未"}
+                  </span>
+                </td>
+                <td style={tdStyle}>{s.memo}</td>
+                <td style={tdStyle}>
+                  <button onClick={() => handleEdit(s)} style={miniButton}>編集</button>
+                  <button onClick={() => handleDelete(s.id)} style={{ ...miniButton, backgroundColor: "#f44336" }}>
+                    削除
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
@@ -214,7 +236,6 @@ export default function SalesTracker() {
           )}
         </div>
 
-        {/* 📅 カレンダー日付入力 */}
         <input
           type="date"
           value={form.date}

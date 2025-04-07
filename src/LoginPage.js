@@ -4,6 +4,8 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  setPersistence,
+  browserSessionPersistence,
 } from "firebase/auth";
 
 export default function LoginPage() {
@@ -20,6 +22,7 @@ export default function LoginPage() {
 
   const handleLogin = async () => {
     try {
+      await setPersistence(auth, browserSessionPersistence); // 🔥 セッション限定ログインに設定
       await signInWithEmailAndPassword(auth, email, password);
     } catch (err) {
       alert("ログイン失敗: " + err.message);
