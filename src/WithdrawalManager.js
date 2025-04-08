@@ -9,7 +9,6 @@ import {
   orderBy,
 } from "firebase/firestore";
 
-// 税抜＆75%の振込金額計算
 const calcPayout = (amount) => {
   const taxExcluded = amount / 1.1;
   return Math.round(taxExcluded * 0.75);
@@ -24,7 +23,8 @@ export default function WithdrawalManager() {
   const [sales, setSales] = useState([]);
   const [livers, setLivers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedIds, setSelectedIds] = useState([]); // ✅ 選択状態を管理
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showWithdrawn, setShowWithdrawn] = useState(false);
 
   useEffect(() => {
     fetchLivers();
@@ -40,9 +40,7 @@ export default function WithdrawalManager() {
   const fetchSales = async () => {
     const q = query(collection(db, "sales"), orderBy("date", "desc"));
     const snapshot = await getDocs(q);
-    const data = snapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((s) => !s.withdrawn);
+    const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     setSales(data);
   };
 
@@ -59,8 +57,17 @@ export default function WithdrawalManager() {
 
   const handleMarkAsWithdrawn = async (id) => {
     await updateDoc(doc(db, "sales", id), { withdrawn: true });
-    setSales((prev) => prev.filter((s) => s.id !== id));
+    setSales((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, withdrawn: true } : s))
+    );
     setSelectedIds((prev) => prev.filter((x) => x !== id));
+  };
+
+  const handleUndoWithdrawn = async (id) => {
+    await updateDoc(doc(db, "sales", id), { withdrawn: false });
+    setSales((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, withdrawn: false } : s))
+    );
   };
 
   const handleMarkSelectedAsWithdrawn = async () => {
@@ -68,16 +75,22 @@ export default function WithdrawalManager() {
       updateDoc(doc(db, "sales", id), { withdrawn: true })
     );
     await Promise.all(updates);
-    setSales((prev) => prev.filter((s) => !selectedIds.includes(s.id)));
+    setSales((prev) =>
+      prev.map((s) =>
+        selectedIds.includes(s.id) ? { ...s, withdrawn: true } : s
+      )
+    );
     setSelectedIds([]);
   };
 
-  const filteredSales = sales.filter((s) => {
-    const name = toKatakana(getLiverName(s.liverId).toLowerCase());
-    const memo = toKatakana((s.memo || "").toLowerCase());
-    const keyword = toKatakana(searchTerm.toLowerCase());
-    return name.includes(keyword) || memo.includes(keyword);
-  });
+  const filteredSales = sales
+    .filter((s) => (showWithdrawn ? s.withdrawn : !s.withdrawn))
+    .filter((s) => {
+      const name = toKatakana(getLiverName(s.liverId).toLowerCase());
+      const memo = toKatakana((s.memo || "").toLowerCase());
+      const keyword = toKatakana(searchTerm.toLowerCase());
+      return name.includes(keyword) || memo.includes(keyword);
+    });
 
   const selectedPayoutTotal = filteredSales
     .filter((s) => selectedIds.includes(s.id))
@@ -87,40 +100,122 @@ export default function WithdrawalManager() {
     <div style={{ padding: "20px", maxWidth: "1000px", margin: "0 auto" }}>
       <h2 style={{ color: "#DAA520" }}>出金管理</h2>
 
+      <div style={{ marginBottom: "10px" }}>
+  <label
+    style={{
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "10px",
+      fontWeight: "bold",
+      whiteSpace: "nowrap", // ←🔥 これ追加
+    }}
+  >
+    出金済みを表示
+    <input
+      type="checkbox"
+      checked={showWithdrawn}
+      onChange={() => setShowWithdrawn(!showWithdrawn)}
+      style={{ transform: "scale(1.2)", accentColor: "#ffd966", margin: 0 }}
+    />
+  </label>
+</div>
+
+
+
+
       <input
         placeholder="検索（ライバー名・メモ）"
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
-        style={inputStyle}
+        style={{
+          width: "100%",
+          padding: "10px",
+          marginBottom: "15px",
+          border: "1px solid #ccc",
+          borderRadius: "8px",
+        }}
       />
 
-      {selectedIds.length > 0 && (
+      {!showWithdrawn && selectedIds.length > 0 && (
         <div style={{ margin: "10px 0", fontWeight: "bold" }}>
           ✅ 選択件数：{selectedIds.length}件 / 振込合計：¥
           {selectedPayoutTotal.toLocaleString()}
-          <button onClick={handleMarkSelectedAsWithdrawn} style={buttonStyle}>
+          <button
+            onClick={handleMarkSelectedAsWithdrawn}
+            style={{
+              backgroundColor: "#FFB800",
+              border: "none",
+              padding: "10px 20px",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontWeight: "bold",
+              color: "#fff",
+              marginLeft: "10px",
+            }}
+          >
             選択を出金済みにする
           </button>
         </div>
       )}
 
-      <ul style={{ marginTop: "10px" }}>
+      <ul style={{ marginTop: "10px", paddingLeft: 0, listStyle: "none" }}>
         {filteredSales.map((s) => (
-          <li key={s.id} style={listItemStyle}>
-            <label>
-              <input
-                type="checkbox"
-                checked={selectedIds.includes(s.id)}
-                onChange={() => handleToggle(s.id)}
-              />{" "}
-              [{new Date(s.date).toLocaleDateString()}] {getLiverName(s.liverId)} / ¥
-              {s.amount} → 振込：¥{calcPayout(s.amount)}
-            </label>
+          <li
+            key={s.id}
+            style={{
+              padding: "14px",
+              marginBottom: "12px",
+              borderRadius: "14px",
+              boxShadow: "0 3px 8px rgba(0, 0, 0, 0.08)",
+              background: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
+              {!showWithdrawn && (
+                <label style={{ display: "flex", alignItems: "center", margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(s.id)}
+                    onChange={() => handleToggle(s.id)}
+                    style={{
+                      transform: "scale(1.2)",
+                      accentColor: "#ffd966",
+                      margin: 0,
+                      verticalAlign: "middle",
+                    }}
+                  />
+                </label>
+              )}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: "bold", fontSize: "1.05em" }}>
+                  [{new Date(s.date).toLocaleDateString()}] {getLiverName(s.liverId)}
+                </div>
+                <div style={{ marginTop: "4px" }}>
+                  ¥{s.amount.toLocaleString()} → 振込：¥{calcPayout(s.amount).toLocaleString()}
+                </div>
+              </div>
+            </div>
             <button
-              onClick={() => handleMarkAsWithdrawn(s.id)}
-              style={miniButton}
+              onClick={() =>
+                showWithdrawn
+                  ? handleUndoWithdrawn(s.id)
+                  : handleMarkAsWithdrawn(s.id)
+              }
+              style={{
+                backgroundColor: showWithdrawn ? "#f44336" : "#4CAF50",
+                border: "none",
+                padding: "6px 10px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.85em",
+                color: "#fff",
+              }}
             >
-              出金済みに
+              {showWithdrawn ? "未出金に戻す" : "出金済みに"}
             </button>
           </li>
         ))}
@@ -128,38 +223,3 @@ export default function WithdrawalManager() {
     </div>
   );
 }
-
-const inputStyle = {
-  width: "100%",
-  padding: "10px",
-  marginBottom: "15px",
-  border: "1px solid #ccc",
-  borderRadius: "8px",
-};
-
-const buttonStyle = {
-  backgroundColor: "#FFB800",
-  border: "none",
-  padding: "10px 20px",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "bold",
-  color: "#fff",
-  marginLeft: "10px",
-};
-
-const miniButton = {
-  backgroundColor: "#4CAF50",
-  border: "none",
-  padding: "6px 10px",
-  borderRadius: "6px",
-  cursor: "pointer",
-  fontSize: "0.85em",
-  color: "#fff",
-  marginLeft: "10px",
-};
-
-const listItemStyle = {
-  padding: "10px 0",
-  borderBottom: "1px solid #ddd",
-};

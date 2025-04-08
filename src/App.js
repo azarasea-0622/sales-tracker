@@ -6,6 +6,7 @@ import RankingPage from "./RankingPage";
 import LoginPage from "./LoginPage";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./lib/firebase";
+import "./theme.css";
 
 function App() {
   const [page, setPage] = useState("livers");
